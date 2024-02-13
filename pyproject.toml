@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "ds-memory-game"
+version = "0.1.0"
+description = ""
+authors = ["Pedro  <55058149+PedroG022@users.noreply.github.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.7"
+requests = "^2.31.0"
+bs4 = "^0.0.2"
+flet = "^0.19.0"
+fletrt = "^0.0.4"
+random-username = "^1.0.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
