@@ -20,7 +20,7 @@ class Client:
 
         if not identifier:
             logger.info('Client identifier is not present. Generating a random one...')
-            self.identifier: generate_username()[0]
+            identifier = generate_username()[0]
 
         self.identifier: str = identifier
 

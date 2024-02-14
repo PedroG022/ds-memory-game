@@ -1,5 +1,7 @@
 import logging
 import pickle
+import threading
+import time
 from datetime import datetime
 from socket import socket, AF_INET, SOCK_STREAM
 from threading import Thread, Event
@@ -14,11 +16,15 @@ class Server:
     # Server's parameters initialization
     def __init__(self, port: int):
         self.__socket: socket = socket(AF_INET, SOCK_STREAM)
-
         self.__port = port
 
         self.__server_shutdown: Event = Event()
+
         self.__client_sockets: dict[Identifier: socket] = {}
+        self.__client_disconnection_events: dict[Identifier: Event] = {}
+
+    def client_count(self) -> int:
+        return len(self.__client_sockets)
 
     # Method to start the server
     def start(self):
@@ -38,35 +44,44 @@ class Server:
         self.__server_shutdown.set()
         self.__socket.close()
 
-    # Method that runs once a new client is connected
-    def __on_new_client(self, client_socket: socket):
-        identifier_str: str = pickle.loads(client_socket.recv(1024))
-        identifier: Identifier = Identifier(identifier_str)
-
-        identifier_dump: bytes = pickle.dumps(identifier)
-        client_socket.sendall(identifier_dump)
-
-        logger.info(f'New client {client_socket.getsockname()}: "{identifier.name}"')
-
-        self.on_new_client(identifier)
-
-        self.__client_sockets[identifier] = client_socket
-        self.__handle_client_messages(client_socket, identifier)
-
+    # Disconnects all the connected clients
     def __disconnect_all_clients(self):
-        for client_socket in self.__client_sockets.values():
-            client_socket: socket
-            client_socket.close()
+        for identifier in self.__client_sockets.keys():
+            self.disconnect_client(identifier)
+
+    # Disconnects a client from the server given its identifier
+    def disconnect_client(self, identifier: Identifier):
+        logger.info(f'Received disconnection request for client {identifier}')
+
+        if identifier in self.__client_disconnection_events.keys():
+            event: Event = self.__client_disconnection_events[identifier]
+            event.set()
+        else:
+            logger.error(f'Unable to find client {identifier} for disconnection request!')
+
+    # Listen events to disconnect clients from the server
+    def __disconnect_listener(self, client_socket: socket, identifier: Identifier, event: Event):
+        while not event.is_set():
+            time.sleep(0.1)
+
+        logger.info(f'Disconnection event triggered for client {identifier}')
+
+        client_socket.close()
+
+        del self.__client_sockets[identifier]
+        del self.__client_disconnection_events[identifier]
+
+        self.on_client_disconnect(identifier)
 
     # Handles the messages that will be received from the clients
-    def __handle_client_messages(self, client_socket: socket, client_identifier: Identifier):
+    def __handle_client_messages(self, client_socket: socket, identifier: Identifier):
         while not self.__server_shutdown.is_set():
             try:
                 data = client_socket.recv(1024)
                 message: Message = pickle.loads(data)
 
                 # Sets the message identifier for the sender
-                message.identifier = client_identifier
+                message.identifier = identifier
 
                 # Set the message received date
                 message.date = datetime.now()
@@ -75,8 +90,10 @@ class Server:
             # Catches clients disconnections and other errors
             except Exception as exception:
                 if isinstance(exception, ConnectionResetError):
-                    del self.__client_sockets[client_identifier]
-                    self.on_client_disconnect(client_identifier)
+                    del self.__client_sockets[identifier]
+                    del self.__client_disconnection_events[identifier]
+
+                    self.on_client_disconnect(identifier)
                 elif not isinstance(exception, ConnectionAbortedError):
                     logger.error(f'Error while handling client message: {exception}')
                 break
@@ -96,10 +113,40 @@ class Server:
     def __listen_clients(self):
         while not self.__server_shutdown.is_set():
             try:
+                # Accept the connection from the client
                 client_socket, address = self.__socket.accept()
 
-                handle_client_thread: Thread = Thread(target=self.__on_new_client, args=(client_socket,))
-                handle_client_thread.start()
+                # Receives the identifier
+                identifier_str: str = pickle.loads(client_socket.recv(1024))
+                identifier: Identifier = Identifier(identifier_str)
+
+                # Sends the identifier back, with the UUID filled
+                identifier_dump: bytes = pickle.dumps(identifier)
+                client_socket.sendall(identifier_dump)
+
+                # Logs the new connection
+                logger.info(f'New client {client_socket.getsockname()}: "{identifier.name}"')
+
+                # Add the client socket to the server's socket list
+                self.__client_sockets[identifier] = client_socket
+
+                # The event to handle disconnections from the server
+                closure_event: Event = Event()
+                self.__client_disconnection_events[identifier] = closure_event
+
+                # Triggers the event handler
+                new_client_thread = threading.Thread(target=self.on_new_client, args=(identifier,))
+                new_client_thread.start()
+
+                # Threads to handle messaging and disconnection events
+                message_handler_thread: Thread = Thread(target=self.__handle_client_messages,
+                                                        args=(client_socket, identifier))
+
+                disconnection_handler_thread: Thread = Thread(target=self.__disconnect_listener,
+                                                              args=(client_socket, identifier, closure_event))
+
+                message_handler_thread.start()
+                disconnection_handler_thread.start()
             except Exception as exception:
                 # Accept method was aborted by socket's disconnection,
                 # so we can ignore this
