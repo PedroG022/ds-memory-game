@@ -1,7 +1,18 @@
+import logging
+
 import flet as ft
 from fletrt import Router
 
 from src.pages import GamePage, HostPage, JoinPage, HomePage
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s | %(levelname)s | [%(name)s] %(message)s",
+)
+
+# Ignore INFO and DEBUG logs from the flet packages
+logging.getLogger('flet_core').setLevel(logging.ERROR)
+logging.getLogger('flet_runtime').setLevel(logging.ERROR)
 
 
 def configure_page(page: ft.Page):
