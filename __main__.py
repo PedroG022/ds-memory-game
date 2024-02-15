@@ -3,6 +3,7 @@ import logging
 import flet as ft
 from fletrt import Router
 
+import src.scrapper as scrapper
 from src.pages import GamePage, HostPage, JoinPage, HomePage
 
 logging.basicConfig(
@@ -13,6 +14,7 @@ logging.basicConfig(
 # Ignore INFO and DEBUG logs from the flet packages
 logging.getLogger('flet_core').setLevel(logging.ERROR)
 logging.getLogger('flet_runtime').setLevel(logging.ERROR)
+logging.getLogger('urllib3.connectionpool').setLevel(logging.ERROR)
 
 
 def configure_page(page: ft.Page):
@@ -40,4 +42,5 @@ def main(page: ft.Page):
     page.update()
 
 
-ft.app(target=main)
+if __name__ == "__main__":
+    scrapper.run(lambda: ft.app(target=main))
