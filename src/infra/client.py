@@ -25,14 +25,23 @@ class Client:
         self.identifier: str = identifier
 
         self.on_message: Optional[Callable[[Message], None]] = None
+        self.on_disconnect: Optional[Callable] = None
 
     def __handle_io(self):
         while self.connection:
-            data = self.connection.recv(1024)
-            message: Message = pickle.loads(data)
+            try:
+                data = self.connection.recv(1024)
+                message: Message = pickle.loads(data)
 
-            if self.on_message:
-                self.on_message(message)
+                if self.on_message:
+                    self.on_message(message)
+            except Exception as exception:
+                if isinstance(exception, ConnectionResetError):
+                    logger.info('Disconnected from the server!')
+                    threading.Thread(target=self.on_disconnect).start()
+                    break
+                else:
+                    logger.error(f'An exception occurred while receiving message: {exception}')
 
     # Method to set the handler for the messages received from the server
     def set_on_message_handler(self, handler: Callable[[Message], None]):
