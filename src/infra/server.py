@@ -98,6 +98,15 @@ class Server:
                     logger.error(f'Error while handling client message: {exception}')
                 break
 
+    def send_message(self, target_client_identifier: Identifier, message: Message):
+        if target_client_identifier not in self.__client_sockets:
+            logger.error(f'Client not found while trying to send message: {target_client_identifier}')
+            return
+
+        encoded_message: bytes = pickle.dumps(message)
+        client_socket: socket = self.__client_sockets[target_client_identifier]
+        client_socket.send(encoded_message)
+
     # Broadcasts a message to all clients
     def broadcast(self, message: Message):
         for identifier in self.__client_sockets.keys():
