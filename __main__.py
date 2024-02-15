@@ -19,7 +19,7 @@ logging.getLogger('urllib3.connectionpool').setLevel(logging.ERROR)
 
 def configure_page(page: ft.Page):
     page.window_width = 640
-    page.window_height = 480
+    page.window_height = 580
 
     page.window_maximizable = False
     page.window_resizable = False
