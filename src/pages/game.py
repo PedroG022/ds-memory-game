@@ -21,7 +21,7 @@ CARD_SIZE = 100
 RUNS = 4
 GRID_SIZE = 500
 
-IMAGES_PATH = path.join(os.getcwd(), './out/')
+IMAGES_PATH = './out/'
 
 
 def get_pairs_list_shuffled():
