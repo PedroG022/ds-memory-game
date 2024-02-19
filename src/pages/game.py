@@ -52,6 +52,7 @@ class GamePage(Route):
         self.last = None
 
         self.found_cards = 0
+        self.found_cards_list = []
 
         self.points: Points = Points()
         self.points.client_points = 0
@@ -101,13 +102,33 @@ class GamePage(Route):
             client_ref = connection
 
         if len(self.open_cards) == 2:
+            self.all_cards_status(Status.DISABLED)
             Thread(target=self.check_match, args=(by_server, is_server, server_ref, client_ref)).start()
+
+    def cs(self, status: Status, found: bool):
+        not_found_cards = [card for card in self.grid.controls if card not in self.found_cards_list]
+
+        if found:
+            not_found_cards = [card for card in self.grid.controls if card not in not_found_cards]
+
+        for card in not_found_cards:
+            card.disabled = status.value
+
+        self.page.update()
 
     def check_match(self, played_by_server: bool, executed_by_server: bool, server: Optional[Server] = None,
                     client: Optional[Client] = None):
         card1, card2 = self.open_cards
 
+        match = False
+
         if card1.data == card2.data:
+            match = True
+            card1.onclick = None
+            card2.onclick = None
+
+            self.found_cards_list.extend([card1, card2])
+
             if executed_by_server and server:
                 self.found_cards += 2
 
@@ -128,14 +149,7 @@ class GamePage(Route):
                 server.send_message(self.client_identifier, GameMessage(Subject.POINTS, 0, self.points))
                 self.points_text.value = f'Server: {self.points.server_points}\tClient: {self.points.client_points}'
 
-            card1.on_click = None
-            card2.on_click = None
-
-        self.all_cards_status(Status.DISABLED)
-
         time.sleep(2)
-
-        self.all_cards_status(Status.ENABLED)
 
         card1.content = ft.Container()
         card2.content = ft.Container()
@@ -143,12 +157,25 @@ class GamePage(Route):
         self.open_cards.clear()
         self.page.update()
 
+        done_message: GameMessage = GameMessage(Subject.TURN, 0, 0)
+
         if executed_by_server and server:
             winner = self.check_endgame()
 
             if winner != -1:
                 server.send_message(self.client_identifier, GameMessage(Subject.END_GAME, 0, winner))
                 self.declare_winner(winner, True)
+
+        if played_by_server and executed_by_server and server:
+            if not match:
+                server.send_message(self.client_identifier, done_message)
+            else:
+                self.cs(Status.ENABLED, False)
+        elif client and not played_by_server:
+            if not match:
+                client.send_message(done_message)
+            else:
+                self.cs(Status.ENABLED, False)
 
         self.page.update()
 
@@ -229,7 +256,9 @@ class GamePage(Route):
                 server.disconnect_client(identifier)
                 return
 
-            self.info_text.value = f'Server: Connected with {identifier.name}'
+            self.info_text.value = f'Connected with {identifier.name}'
+            self.page.title = f'Game with {identifier.name}'
+
             self.page.update(self.info_text)
 
             self.set_colors(ft.colors.PURPLE_400)
@@ -240,6 +269,7 @@ class GamePage(Route):
             self.initialize_cards(server, card_list)
 
             server.send_message(identifier, GameMessage(subject=Subject.MAP, count=0, body=card_list))
+            self.all_cards_status(Status.DISABLED)
 
         def on_msg(message: GameMessage):
             if message.subject == Subject.ROUND:
@@ -247,11 +277,14 @@ class GamePage(Route):
 
                 self.click_card(target_card, server, broadcast=False, by_server=False)
 
-                if len(self.open_cards) == 1:
-                    self.all_cards_status(Status.DISABLED)
-
                 if len(self.open_cards) == 2:
                     Thread(target=self.check_match, args=(False, True)).start()
+
+            if message.subject == Subject.TURN:
+                self.info_text.value = 'Your turn'
+                self.page.update()
+
+                self.cs(Status.ENABLED, False)
 
         server.on_new_client = on_conn
         server.on_message_received = on_msg
@@ -272,9 +305,6 @@ class GamePage(Route):
             if message.subject == Subject.ROUND:
                 self.click_card(self.grid.controls[message.body], client, broadcast=False, by_server=True)
 
-                if len(self.open_cards) == 1:
-                    self.all_cards_status(Status.DISABLED)
-
                 if len(self.open_cards) == 2:
                     Thread(target=self.check_match, args=(True, False, None, client)).start()
 
@@ -285,6 +315,12 @@ class GamePage(Route):
 
             if message.subject == Subject.END_GAME:
                 self.declare_winner(message.body, False)
+
+            if message.subject == Subject.TURN:
+                self.info_text.value = 'Your turn'
+                self.page.update()
+
+                self.cs(Status.ENABLED, False)
 
         client.on_message = on_message
         client.on_disconnect = self.on_disconnect
