@@ -56,7 +56,9 @@ class Client:
     # Method used to establish a connection to the server
     def connect(self):
         try:
+            logger.info(f'Trying to establish a connection with: \'{self.host}:{self.port}\'')
             self.connection.connect((self.host, self.port))
+
             logging.info('Connection established!')
 
             # Identification handling
@@ -78,6 +80,8 @@ class Client:
         except ConnectionError as error:
             logging.error('Connection error!')
             raise ConnectionError from error
+        except Exception as exception:
+            logger.error(f'Unknown error! {exception}')
 
     # Disconnects from the server
     def disconnect(self):
