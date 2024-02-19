@@ -200,7 +200,6 @@ class GamePage(Route):
 
         for i in range(CARDS_COUNT):
             self.grid.controls[i].data = card_list[i]
-            self.grid.controls[i].content = ft.Text(f'{card_list[i]}')
 
         for i in range(CARDS_COUNT):
             self.grid.controls[i].on_click = \
