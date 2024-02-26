@@ -28,7 +28,7 @@ class Server:
 
     # Method to start the server
     def start(self):
-        self.__socket.bind(('127.0.0.1', self.__port))
+        self.__socket.bind(('0.0.0.0', self.__port))
         self.__socket.listen()
 
         thread_listen_clients = Thread(target=self.__listen_clients)
